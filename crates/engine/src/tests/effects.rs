@@ -554,6 +554,28 @@ fn gradient_ramp_swap_keys_animated_colors_at_layer_time() {
 }
 
 #[test]
+/// An expression on one colour stays in place: the swap exchanges the values underneath it.
+fn gradient_ramp_swap_keeps_an_expression_on_one_color() {
+    let (mut s, a, _) = comp_with_two_solids();
+    let target = apply(&mut s, a, "Gradient Ramp");
+    s.execute("prop.set", json!({"layer": a, "path": "effects/#1/startColor", "value": [1.0, 0.0, 0.0, 1.0]})).unwrap();
+    s.execute("prop.set", json!({"layer": a, "path": "effects/#1/endColor", "value": [0.0, 0.0, 1.0, 1.0]})).unwrap();
+    s.execute("prop.setExpression", json!({"layer": a, "path": "effects/#1/startColor", "expression": "value"})).unwrap();
+    let before = layer(&s, a);
+    let expr = before.props.find_group(target).unwrap().prop("startColor").unwrap().expr.clone();
+    assert!(expr.is_some());
+    s.execute("effect.swapGradientRampColors", json!({"layer": a, "effect": target})).unwrap();
+    let after = layer(&s, a);
+    let g = after.props.find_group(target).unwrap();
+    assert_eq!(g.prop("startColor").unwrap().value, KV::Color([0.0, 0.0, 1.0, 1.0]));
+    assert_eq!(g.prop("endColor").unwrap().value, KV::Color([1.0, 0.0, 0.0, 1.0]));
+    assert_eq!(g.prop("startColor").unwrap().expr, expr);
+    assert_eq!(g.prop("endColor").unwrap().expr, None);
+    assert!(s.undo());
+    assert_eq!(layer(&s, a).props, before.props);
+}
+
+#[test]
 /// Bad targets and a damaged colour parameter fail without editing the project or the undo history.
 fn gradient_ramp_swap_rejects_invalid_targets_without_editing() {
     let mut empty = Session::default();
